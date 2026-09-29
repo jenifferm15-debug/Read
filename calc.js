@@ -86,6 +86,31 @@
     return Math.round(t / MS_PER_DAY);
   }
 
+  // The same weekday as `n`, in the week nearest its anniversary `years` later.
+  // Mon Aug 24, 2026 -> Mon Aug 23, 2027 (Aug 24, 2027 is a Tuesday).
+  function sameWeekdayAnniversary(n, years) {
+    var t = addYears(n, years);
+    var delta = (dayOfWeek(n) - dayOfWeek(t) + 7) % 7;
+    if (delta > 3) delta -= 7;
+    return t + delta;
+  }
+
+  // Copies each entered break into later years at the same weekday and length,
+  // so Thanksgiving week Mon-Sun stays Mon-Sun. A copy is dropped when it
+  // overlaps a break the user entered, since that entry is the real date.
+  function repeatBreaks(entered, years) {
+    var out = entered.map(function (b) { return { start: b.start, end: b.end, repeated: false }; });
+    entered.forEach(function (b) {
+      for (var k = 1; k <= years; k++) {
+        var s = sameWeekdayAnniversary(b.start, k);
+        var e = s + (b.end - b.start);
+        var clash = entered.some(function (o) { return s <= o.end && e >= o.start; });
+        if (!clash) out.push({ start: s, end: e, repeated: true });
+      }
+    });
+    return out.sort(function (a, b) { return a.start - b.start; });
+  }
+
   // Builds a predicate telling whether a day counts toward completion.
   function makeCounter(weekendsCount, breaks) {
     return function (n) {
@@ -176,6 +201,8 @@
     var start = parseISO(raw.start);
     if (start === null) errors.push('Enter a valid start date.');
     var breaks = normalizeBreaks(raw.breaks, errors);
+    var repeating = raw.repeatBreaks !== false && breaks.length > 0;
+    if (repeating) breaks = repeatBreaks(breaks, years + 1);
     var counts = makeCounter(weekendsCount, breaks);
 
     // Hours unit and regulatory minimums.
@@ -329,6 +356,12 @@
     if (breaks.length) {
       notes.push('Scheduled breaks are not counted as instructional time and extend any period they fall inside.');
     }
+    if (repeating) {
+      notes.push('Breaks repeat each year on the same weekdays in the week nearest the original dates, so each year has a similar break.');
+    }
+    ays.forEach(function (ay) {
+      ay.breaks = breaks.filter(function (b) { return b.start <= ay.end && b.end >= ay.start; });
+    });
 
     return {
       ok: true,
@@ -353,7 +386,7 @@
     for (var y = 0; y < years; y++) {
       if (y > 0) {
         if (anniversary) {
-          var target = addYears(start, y);
+          var target = sameWeekdayAnniversary(start, y);
           if (target <= ays[y - 1].end) {
             errors.push('Academic year ' + (y + 1) + ' would start ' + formatDate(target) + ', before academic year ' + y +
               ' ends. Choose "Right after the last term" or shorten the terms.');

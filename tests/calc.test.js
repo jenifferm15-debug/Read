@@ -31,7 +31,7 @@ test('anniversary next year starts same date next year', () => {
   const r = C.calculate({ measure: 'credit', calendar: 'semester', start: '2026-08-24', termWeeks: 15,
     weekends: 'count', years: 2, gapDays: 35, nextYear: 'anniversary' });
   assert.ok(r.ok, r.errors.join());
-  assert.equal(iso(r.years[1].start), '2027-08-24');
+  assert.equal(iso(r.years[1].start), '2027-08-23');
 });
 
 test('anniversary conflict is an error, not an overlap', () => {
@@ -107,7 +107,7 @@ test('trimester: summer trimester is required and counts toward the AY', () => {
   assert.match(a.periods[2].label, /summer, required/);
   assert.equal(r.ayWeeks, 44);
   assert.equal(iso(a.periods[2].end), '2027-07-11');
-  assert.equal(iso(r.years[1].start), '2027-08-24');
+  assert.equal(iso(r.years[1].start), '2027-08-23');
 });
 
 test('trimester summer cannot be turned off', () => {
@@ -140,4 +140,33 @@ test('quarter: summer header is the first payment period', () => {
 test('quarter with no summer stays at 3 terms', () => {
   const r = C.calculate({ measure: 'credit', calendar: 'quarter', start: '2026-09-21', summer: 'none', weekends: 'count', years: 1 });
   assert.equal(r.years[0].periods.length, 3);
+});
+
+test('next year starts on the same weekday nearest the anniversary', () => {
+  const r = C.calculate({ measure: 'credit', calendar: 'semester', start: '2026-08-24', termWeeks: 15,
+    weekends: 'count', years: 4, gapDays: 28, nextYear: 'anniversary' });
+  assert.ok(r.ok, r.errors.join());
+  assert.deepEqual(r.years.map(y => iso(y.start)), ['2026-08-24', '2027-08-23', '2028-08-21', '2029-08-27']);
+  r.years.forEach(y => assert.equal(new Date(y.start * 86400000).getUTCDay(), 1));
+});
+
+test('breaks repeat each year on the same weekdays and extend terms', () => {
+  const base = { measure: 'credit', calendar: 'semester', start: '2026-08-24', termWeeks: 15, weekends: 'count',
+    years: 2, gapDays: 28, nextYear: 'anniversary', breaks: [{ start: '2026-11-23', end: '2026-11-29' }] };
+  const r = C.calculate(base);
+  const y2 = r.years[1];
+  assert.equal(iso(y2.periods[0].start), '2027-08-23');
+  assert.equal(iso(y2.periods[0].end), '2027-12-12'); // 15 weeks + the repeated Nov 22-28 break
+  assert.ok(y2.breaks.some(b => b.repeated && iso(b.start) === '2027-11-22' && iso(b.end) === '2027-11-28'));
+  const off = C.calculate({ ...base, repeatBreaks: false });
+  assert.equal(iso(off.years[1].periods[0].end), '2027-12-05');
+});
+
+test('an entered next-year break replaces the repeated copy', () => {
+  const r = C.calculate({ measure: 'credit', calendar: 'semester', start: '2026-08-24', termWeeks: 15, weekends: 'count',
+    years: 2, gapDays: 28, nextYear: 'anniversary',
+    breaks: [{ start: '2026-11-23', end: '2026-11-29' }, { start: '2027-11-24', end: '2027-11-30' }] });
+  const nov2027 = r.years[1].breaks.filter(b => b.start >= C.parseISO('2027-11-01') && b.start <= C.parseISO('2027-12-31'));
+  assert.equal(nov2027.length, 1);
+  assert.equal(iso(nov2027[0].start), '2027-11-24');
 });

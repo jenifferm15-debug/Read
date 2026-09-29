@@ -21,6 +21,11 @@ Counting options:
 - **Weekends count**: one week of instructional time is 7 calendar days.
 - **Weekends don't count**: one week is 5 weekdays, and weekends push end dates out.
 - **Scheduled breaks** are never counted and extend any period they fall inside.
+  By default each break repeats every academic year on the same weekdays in the
+  week nearest the original dates. A break entered for a later year replaces the copy.
+- **Next academic year** (term calendars) starts on the same weekday as the first
+  start, in the week nearest the anniversary (Mon Aug 24, 2026 → Mon Aug 23, 2027),
+  or right after the last term.
 
 Rule checks flag academic years under the 30-week (credit) or 26-week (clock or
 ED-approved reduction) minimum, hours under 24 semester / 36 quarter / 900 clock,
