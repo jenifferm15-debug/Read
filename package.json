@@ -1,0 +1,9 @@
+{
+  "name": "academic-year-calculator",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Title IV academic year and payment period calculator for standard, nonstandard, and non-term programs.",
+  "scripts": {
+    "test": "node --test tests/"
+  }
+}

@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Academic Year Calculator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: form ledger on the left, results on the right; stacks to one column on phones. */
+:root {
+  --bg: #f3f5f4;
+  --surface: #ffffff;
+  --ink: #17231f;
+  --muted: #5b6a64;
+  --line: #d5ddd9;
+  --accent: #1d6b55;
+  --accent-soft: #e2efe9;
+  --ok: #2f7a4b;
+  --warn: #9a5b00;
+  --warn-soft: #fbf0dc;
+  --err: #b3261e;
+  --err-soft: #fbe5e3;
+  --p1: #1d6b55;
+  --p2: #4f8f7b;
+  --p3: #8ab8a8;
+  --p4: #b9d6cb;
+  --font-display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-data: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --radius: 6px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111816; --surface: #18221f; --ink: #e4ece8; --muted: #95a59e; --line: #2c3a35;
+    --accent: #5fbf9c; --accent-soft: #1d3029; --ok: #6cc38e; --warn: #e3a64a; --warn-soft: #34291a;
+    --err: #f08a80; --err-soft: #3a1f1d; --p1: #5fbf9c; --p2: #3f9a7b; --p3: #2e7560; --p4: #245446;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111816; --surface: #18221f; --ink: #e4ece8; --muted: #95a59e; --line: #2c3a35;
+  --accent: #5fbf9c; --accent-soft: #1d3029; --ok: #6cc38e; --warn: #e3a64a; --warn-soft: #34291a;
+  --err: #f08a80; --err-soft: #3a1f1d; --p1: #5fbf9c; --p2: #3f9a7b; --p3: #2e7560; --p4: #245446;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.5 var(--font-body);
+  padding-inline: 16px; padding-block: 24px 48px;
+}
+.wrap { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+header h1 {
+  font-family: var(--font-display); font-weight: 600; font-size: 1.9rem; line-height: 1.15;
+  margin: 0; text-wrap: balance; letter-spacing: -0.01em;
+}
+header p { margin: 6px 0 0; color: var(--muted); max-width: 68ch; }
+.cite { font-family: var(--font-data); font-size: 0.78rem; color: var(--muted); letter-spacing: 0.02em; }
+
+.grid { display: grid; grid-template-columns: minmax(0, 380px) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 860px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+
+form { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+fieldset { border: 0; margin: 0; padding: 18px 18px 20px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+fieldset + fieldset { border-top: 1px solid var(--line); }
+legend {
+  float: left; width: 100%; padding: 0; margin-bottom: 2px;
+  font-family: var(--font-display); font-weight: 600; font-size: 0.8rem;
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent);
+}
+.field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.field > label, .field > .label { font-weight: 500; font-size: 0.9rem; }
+.hint { font-size: 0.8rem; color: var(--muted); }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 400px) { .row2 { grid-template-columns: 1fr; } }
+
+input[type="date"], input[type="number"], input[type="text"], select {
+  width: 100%; font: inherit; font-size: 0.95rem; color: var(--ink); background: var(--bg);
+  border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 10px; min-height: 40px; min-width: 0;
+}
+input:focus-visible, select:focus-visible, button:focus-visible, .seg input:focus-visible + span, summary:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+.seg { display: flex; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--bg); }
+.seg label { flex: 1; position: relative; cursor: pointer; }
+.seg input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.seg span { display: block; text-align: center; padding: 8px 6px; font-size: 0.88rem; font-weight: 500; color: var(--muted); }
+.seg label + label span { border-left: 1px solid var(--line); }
+.seg input:checked + span { background: var(--accent); color: var(--surface); }
+.check { display: flex; gap: 8px; align-items: flex-start; font-size: 0.88rem; }
+.check input { margin-top: 3px; accent-color: var(--accent); }
+
+.breaks { display: flex; flex-direction: column; gap: 8px; }
+.break-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+button {
+  font: inherit; font-size: 0.88rem; font-weight: 500; cursor: pointer; border-radius: var(--radius);
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 7px 12px;
+}
+button:hover { border-color: var(--accent); color: var(--accent); }
+.icon-btn { padding: 6px 10px; color: var(--muted); }
+.add-btn { align-self: flex-start; }
+
+/* Results */
+.results { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.type-banner { display: flex; flex-wrap: wrap; gap: 10px; align-items: baseline; }
+.pill {
+  display: inline-block; font-family: var(--font-display); font-weight: 600; font-size: 0.78rem;
+  text-transform: uppercase; letter-spacing: 0.07em; padding: 3px 9px; border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent);
+}
+.pill.ns { background: var(--warn-soft); color: var(--warn); }
+.type-banner strong { font-size: 1rem; }
+.type-banner p { margin: 0; width: 100%; color: var(--muted); font-size: 0.9rem; }
+
+.summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 560px) { .summary { grid-template-columns: minmax(0, 1fr); } }
+.stat { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; }
+.stat .k { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); font-weight: 600; }
+.stat .v { font-family: var(--font-display); font-weight: 600; font-size: 1.35rem; line-height: 1.25; margin-top: 4px; }
+.stat .s { font-size: 0.85rem; color: var(--muted); margin-top: 2px; }
+.stat.primary { border-color: var(--accent); }
+
+.ay { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.ay-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 16px; align-items: baseline; }
+.ay-head h2 { margin: 0; font-family: var(--font-display); font-weight: 600; font-size: 1.15rem; }
+.ay-head .range { font-family: var(--font-data); font-size: 0.88rem; }
+.driver { font-size: 0.84rem; color: var(--muted); }
+.bar { display: flex; height: 12px; border-radius: 3px; overflow: hidden; gap: 2px; }
+.bar div { min-width: 4px; }
+.tbl { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+th { text-align: left; font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td.date { font-family: var(--font-data); font-size: 0.84rem; }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 8px; vertical-align: -1px; }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; }
+.panel h3 { margin: 0 0 8px; font-family: var(--font-display); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.checks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.checks li { display: grid; grid-template-columns: 22px 1fr; gap: 8px; font-size: 0.9rem; }
+.mark { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 0.72rem; font-weight: 700; color: var(--surface); margin-top: 1px; }
+.mark.ok { background: var(--ok); }
+.mark.warn { background: var(--warn); }
+.mark.err { background: var(--err); }
+.mark.info { background: var(--muted); }
+.errors { background: var(--err-soft); border: 1px solid var(--err); border-radius: var(--radius); padding: 14px 16px; }
+.errors h3 { color: var(--err); }
+
+details.how { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+details.how summary { cursor: pointer; padding: 12px 16px; font-weight: 600; }
+.how-body { padding: 0 16px 14px; font-size: 0.9rem; max-width: 75ch; }
+.how-body dt { font-weight: 600; margin-top: 10px; }
+.how-body dd { margin: 2px 0 0; color: var(--muted); }
+footer { color: var(--muted); font-size: 0.8rem; max-width: 80ch; }
+@media (prefers-reduced-motion: no-preference) {
+  .ay, .stat { transition: border-color 0.2s; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="cite">34 CFR 668.3 · 668.4 · 668.8 · FSA Handbook Vol. 3 &amp; 8</div>
+    <h1>Academic Year Calculator</h1>
+    <p>Enter a start date and how the program is scheduled. The calculator returns the academic year end date, when the next academic year starts, and the payment periods inside each year.</p>
+  </header>
+
+  <div class="grid">
+    <form id="f" autocomplete="off" novalidate>
+      <fieldset>
+        <legend>Program</legend>
+        <div class="field">
+          <span class="label">Program is measured in</span>
+          <div class="seg" role="radiogroup" aria-label="Program measure">
+            <label><input type="radio" name="measure" id="m-credit" value="credit" checked><span>Credit hours</span></label>
+            <label><input type="radio" name="measure" id="m-clock" value="clock"><span>Clock hours</span></label>
+          </div>
+        </div>
+        <div class="field">
+          <label for="calendar">Academic calendar</label>
+          <select id="calendar" name="calendar">
+            <optgroup label="Standard terms">
+              <option value="semester">Semesters (2 per year)</option>
+              <option value="trimester">Trimesters (2 per year)</option>
+              <option value="quarter">Quarters (3 per year)</option>
+            </optgroup>
+            <optgroup label="Other">
+              <option value="nonstandard">Nonstandard terms</option>
+              <option value="nonterm">Non-term</option>
+            </optgroup>
+          </select>
+          <span class="hint" id="calendar-hint"></span>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Schedule</legend>
+        <div class="field">
+          <label for="start">Start date</label>
+          <input type="date" id="start" name="start" value="2026-08-24" required>
+        </div>
+
+        <div class="field" data-show="standard">
+          <label for="termWeeks">Weeks of instruction per term</label>
+          <input type="number" id="termWeeks" name="termWeeks" min="1" max="30" step="1" value="15">
+          <span class="hint" id="termWeeks-hint"></span>
+        </div>
+
+        <div class="field" data-show="nonstandard">
+          <label for="nsTermWeeks">Weeks in each term of the academic year</label>
+          <input type="text" id="nsTermWeeks" name="nsTermWeeks" value="8, 8, 8, 8" inputmode="decimal">
+          <span class="hint">Separate with commas. Example: 8, 8, 8, 8 is four 8-week terms.</span>
+        </div>
+
+        <div class="field" data-show="nonterm">
+          <label for="ayWeeks">Weeks of instruction in the academic year</label>
+          <input type="number" id="ayWeeks" name="ayWeeks" min="1" max="60" step="1" value="30">
+        </div>
+
+        <div class="row2">
+          <div class="field">
+            <label for="ayHours" id="ayHours-label">Credit hours in the academic year</label>
+            <input type="number" id="ayHours" name="ayHours" min="1" step="1" value="24">
+          </div>
+          <div class="field" data-show="credit-unit">
+            <label for="creditUnit">Credit type</label>
+            <select id="creditUnit" name="creditUnit">
+              <option value="semester">Semester hours</option>
+              <option value="quarter">Quarter hours</option>
+            </select>
+          </div>
+          <div class="field" data-show="nonterm">
+            <label for="hoursPerWeek">Scheduled hours per week</label>
+            <input type="number" id="hoursPerWeek" name="hoursPerWeek" min="0.5" step="0.5" value="1">
+          </div>
+        </div>
+
+        <div class="row2" data-show="terms">
+          <div class="field">
+            <label for="gapDays">Days off between terms</label>
+            <input type="number" id="gapDays" name="gapDays" min="0" max="180" step="1" value="28">
+          </div>
+          <div class="field">
+            <label for="nextYear">Next academic year starts</label>
+            <select id="nextYear" name="nextYear">
+              <option value="anniversary">Same date next year</option>
+              <option value="next">Right after the last term</option>
+            </select>
+          </div>
+        </div>
+
+        <label class="check" data-show="credit">
+          <input type="checkbox" id="reducedWeeks" name="reducedWeeks">
+          <span>The school has ED approval to reduce the academic year to 26 weeks</span>
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Counting days</legend>
+        <div class="field">
+          <span class="label">Weekends</span>
+          <div class="seg" role="radiogroup" aria-label="Weekends">
+            <label><input type="radio" name="weekends" id="w-count" value="count" checked><span>Count toward completion</span></label>
+            <label><input type="radio" name="weekends" id="w-exclude" value="exclude"><span>Don't count</span></label>
+          </div>
+          <span class="hint" id="weekend-hint"></span>
+        </div>
+
+        <div class="field">
+          <span class="label">Scheduled breaks inside a term</span>
+          <span class="hint">List breaks of 5 or more days, such as Thanksgiving week or winter break. Break days do not count and push end dates out. Single-day holidays usually don't reduce weeks of instruction.</span>
+          <div class="breaks" id="breaks"></div>
+          <button type="button" class="add-btn" id="add-break">Add break</button>
+        </div>
+
+        <div class="field">
+          <label for="years">Academic years to show</label>
+          <select id="years" name="years">
+            <option value="2" selected>2 (this year and next)</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+          </select>
+        </div>
+      </fieldset>
+    </form>
+
+    <section class="results" id="results" aria-live="polite"></section>
+  </div>
+
+  <details class="how">
+    <summary>How this is calculated</summary>
+    <div class="how-body">
+      <dl>
+        <dt>Academic year minimums (34 CFR 668.3)</dt>
+        <dd>At least 30 weeks of instructional time for credit-hour programs (26 with an ED-approved reduction) and 26 weeks for clock-hour programs. Undergraduate programs also need at least 24 semester or trimester hours, 36 quarter hours, or 900 clock hours.</dd>
+        <dt>Week of instructional time</dt>
+        <dd>Seven consecutive days with at least one scheduled day of instruction or exams. When weekends count, a week is 7 calendar days. When they don't, a week is 5 weekdays and weekends extend the end date. Break days are never counted.</dd>
+        <dt>Standard terms</dt>
+        <dd>Semesters and trimesters are typically 14–17 weeks, and two make an academic year. Quarters are typically 10–12 weeks, and three make an academic year. Each term is a payment period.</dd>
+        <dt>Nonstandard terms</dt>
+        <dd>Any term that isn't a semester, trimester, or quarter. Terms are substantially equal when no term differs from another by more than 2 weeks. SE9W terms are substantially equal and at least 9 weeks each. Each term is a payment period, and a student must finish both the weeks and the credits of the academic year before starting the next one.</dd>
+        <dt>Non-term and clock-hour programs (34 CFR 668.4)</dt>
+        <dd>The academic year ends on the later of the date the student completes the weeks and the date they complete the hours. Payment period 1 ends at the later of half the weeks and half the hours. The next academic year starts on the next counted day, so years never overlap.</dd>
+      </dl>
+    </div>
+  </details>
+
+  <footer>Projected dates assume the student attends as scheduled. For non-term and clock-hour programs, actual completion of hours can move the end date. Confirm results against your school's approved academic year definition.</footer>
+</div>
+
+<script src="calc.js"></script>
+<script>
+(function () {
+  'use strict';
+  var C = window.AYCalc;
+  var form = document.getElementById('f');
+  var out = document.getElementById('results');
+  var breaksEl = document.getElementById('breaks');
+  var breakCount = 0;
+  var SWATCH = ['var(--p1)', 'var(--p2)', 'var(--p3)', 'var(--p4)'];
+  var prevCalendar = 'semester';
+
+  function el(tag, attrs, children) {
+    var n = document.createElement(tag);
+    if (attrs) Object.keys(attrs).forEach(function (k) {
+      if (k === 'text') n.textContent = attrs[k];
+      else if (k === 'style') n.style.cssText = attrs[k];
+      else n.setAttribute(k, attrs[k]);
+    });
+    (children || []).forEach(function (c) { if (c) n.appendChild(c); });
+    return n;
+  }
+
+  function addBreak(s, e) {
+    breakCount++;
+    var id = breakCount;
+    var row = el('div', { class: 'break-row' }, [
+      el('input', { type: 'date', id: 'break-start-' + id, 'aria-label': 'Break ' + id + ' first day', 'data-break': 'start' }),
+      el('input', { type: 'date', id: 'break-end-' + id, 'aria-label': 'Break ' + id + ' last day', 'data-break': 'end' }),
+      el('button', { type: 'button', class: 'icon-btn', 'aria-label': 'Remove break ' + id, text: 'Remove' })
+    ]);
+    row.children[0].value = s || '';
+    row.children[1].value = e || '';
+    row.children[2].addEventListener('click', function () { row.remove(); update(); });
+    breaksEl.appendChild(row);
+  }
+
+  function readInputs() {
+    var fd = new FormData(form);
+    var breaks = [];
+    breaksEl.querySelectorAll('.break-row').forEach(function (row) {
+      breaks.push({ start: row.children[0].value, end: row.children[1].value });
+    });
+    return {
+      measure: fd.get('measure'),
+      calendar: fd.get('calendar'),
+      start: fd.get('start'),
+      termWeeks: fd.get('termWeeks'),
+      nsTermWeeks: fd.get('nsTermWeeks'),
+      ayWeeks: fd.get('ayWeeks'),
+      ayHours: fd.get('ayHours'),
+      creditUnit: fd.get('creditUnit'),
+      hoursPerWeek: fd.get('hoursPerWeek'),
+      gapDays: fd.get('gapDays'),
+      nextYear: fd.get('nextYear'),
+      reducedWeeks: fd.get('reducedWeeks') === 'on',
+      weekends: fd.get('weekends'),
+      breaks: breaks,
+      years: fd.get('years')
+    };
+  }
+
+  // Shows only the inputs that apply, and resets defaults when the calendar changes.
+  function syncForm() {
+    var measure = form.measure.value;
+    var calSel = form.calendar;
+    Array.prototype.forEach.call(calSel.options, function (o) {
+      o.disabled = measure === 'clock' && o.value !== 'nonterm';
+    });
+    if (measure === 'clock') calSel.value = 'nonterm';
+    var cal = calSel.value;
+    var standard = cal === 'semester' || cal === 'trimester' || cal === 'quarter';
+    var show = {
+      standard: standard,
+      nonstandard: cal === 'nonstandard',
+      nonterm: cal === 'nonterm',
+      terms: cal !== 'nonterm',
+      credit: measure === 'credit',
+      'credit-unit': measure === 'credit' && !standard
+    };
+    form.querySelectorAll('[data-show]').forEach(function (n) {
+      n.hidden = !show[n.getAttribute('data-show')];
+    });
+
+    var unit = measure === 'clock' ? 'clock' : (standard ? C.CALENDARS[cal].creditUnit : form.creditUnit.value);
+    document.getElementById('ayHours-label').textContent =
+      (measure === 'clock' ? 'Clock' : (unit === 'quarter' ? 'Quarter' : 'Semester') + ' credit') + ' hours in the academic year';
+
+    if (cal !== prevCalendar) {
+      if (standard) form.termWeeks.value = C.CALENDARS[cal].defaultWeeks;
+      form.gapDays.value = cal === 'quarter' ? 7 : (cal === 'nonstandard' ? 0 : 28);
+      form.ayHours.value = C.MIN_HOURS[unit];
+      if (cal === 'nonterm') {
+        form.ayWeeks.value = measure === 'clock' ? 26 : 30;
+        form.hoursPerWeek.value = measure === 'clock' ? 30 : 1;
+      }
+      prevCalendar = cal;
+    }
+
+    var hints = {
+      semester: 'Two semesters of instruction make one academic year.',
+      trimester: 'Two trimesters of instruction make one academic year.',
+      quarter: 'Three quarters of instruction make one academic year.',
+      nonstandard: 'Terms that are not semesters, trimesters, or quarters, such as 8-week modules.',
+      nonterm: measure === 'clock'
+        ? 'Clock-hour programs have no terms. The year ends when both weeks and hours are done.'
+        : 'No terms. The year ends when both weeks and credits are done.'
+    };
+    document.getElementById('calendar-hint').textContent = hints[cal];
+    if (standard) {
+      var t = C.CALENDARS[cal].typical;
+      document.getElementById('termWeeks-hint').textContent = 'Typical ' + C.CALENDARS[cal].label.toLowerCase() + ': ' + t[0] + '–' + t[1] + ' weeks.';
+    }
+    document.getElementById('weekend-hint').textContent = form.weekends.value === 'count'
+      ? 'One week = 7 calendar days. Terms can end on a weekend.'
+      : 'One week = 5 weekdays. Saturdays and Sundays push end dates out.';
+  }
+
+  function stat(k, v, s, primary) {
+    return el('div', { class: 'stat' + (primary ? ' primary' : '') }, [
+      el('div', { class: 'k', text: k }), el('div', { class: 'v', text: v }), s ? el('div', { class: 's', text: s }) : null
+    ]);
+  }
+
+  function checkList(items) {
+    var marks = { ok: '✓', warn: '!', err: '×', info: 'i' };
+    return el('ul', { class: 'checks' }, items.map(function (c) {
+      return el('li', null, [el('span', { class: 'mark ' + c.level, 'aria-hidden': 'true', text: marks[c.level] }), el('span', { text: c.text })]);
+    }));
+  }
+
+  function num(n) { return (Math.round(n * 10) / 10).toString(); }
+
+  function render(r) {
+    out.textContent = '';
+    if (r.classification) {
+      var ns = r.calendar !== 'semester' && r.calendar !== 'trimester' && r.calendar !== 'quarter';
+      var pillText = !r.calendar ? 'Program type' : (ns ? (r.calendar === 'nonterm' ? 'Non-term' : 'Nonstandard') : 'Standard');
+      out.appendChild(el('div', { class: 'type-banner' }, [
+        el('span', { class: 'pill' + (ns ? ' ns' : ''), text: pillText }),
+        el('strong', { text: r.classification }),
+        el('p', { text: r.classDetail })
+      ]));
+    }
+    if (!r.ok) {
+      out.appendChild(el('div', { class: 'errors', role: 'alert' }, [
+        el('h3', { text: 'Fix these to see dates' }),
+        checkList(r.errors.map(function (e) { return { level: 'err', text: e }; }))
+      ]));
+      if (r.checks.length) out.appendChild(el('div', { class: 'panel' }, [el('h3', { text: 'Rule checks' }), checkList(r.checks)]));
+      return;
+    }
+
+    var y1 = r.years[0], y2 = r.years[1];
+    var sub1 = C.formatDate(y1.start) + ' to ' + C.formatDate(y1.end);
+    var summary = el('div', { class: 'summary' }, [
+      stat('Academic year 1 ends', C.formatDate(y1.end), 'Starts ' + C.formatDate(y1.start), true),
+      y2 ? stat('Next academic year starts', C.formatDate(y2.start), 'Ends ' + C.formatDate(y2.end)) : null
+    ]);
+    out.appendChild(summary);
+
+    r.years.forEach(function (ay) {
+      var span = ay.end - ay.start + 1;
+      var bar = el('div', { class: 'bar', 'aria-hidden': 'true' }, ay.periods.map(function (p, i) {
+        return el('div', { style: 'flex:' + (p.end - p.start + 1) + ';background:' + SWATCH[i % SWATCH.length], title: p.label });
+      }));
+      var driver = '';
+      if (ay.drivenBy === 'hours') driver = 'Ends when the hours are completed (' + C.formatDate(ay.hoursEnd) + '). Weeks alone finish ' + C.formatDate(ay.weeksEnd) + '.';
+      else if (ay.drivenBy === 'weeks') driver = 'Ends when the weeks are completed (' + C.formatDate(ay.weeksEnd) + '). Hours at the scheduled pace finish ' + C.formatDate(ay.hoursEnd) + '.';
+      else if (ay.drivenBy === 'both') driver = 'Weeks and hours finish on the same day.';
+      else driver = num(r.ayWeeks) + ' weeks of instruction across ' + ay.periods.length + ' terms, ' + span + ' calendar days.';
+
+      var rows = ay.periods.map(function (p, i) {
+        var len = r.calendar === 'nonterm'
+          ? num(p.weeks) + ' wks · ' + num(p.hours) + ' ' + (r.hourUnit === 'clock' ? 'clock' : 'cr') + ' hrs'
+          : num(p.weeks) + ' wks';
+        return el('tr', null, [
+          el('td', null, [el('span', { class: 'sw', style: 'background:' + SWATCH[i % SWATCH.length] }), document.createTextNode(p.label)]),
+          el('td', { class: 'date', text: C.formatDate(p.start) }),
+          el('td', { class: 'date', text: C.formatDate(p.end) }),
+          el('td', { text: len }),
+          el('td', { text: (p.end - p.start + 1) + ' days' })
+        ]);
+      });
+      var tbl = el('div', { class: 'tbl' }, [el('table', null, [
+        el('thead', null, [el('tr', null, ['Payment period', 'Starts', 'Ends', 'Length', 'Calendar'].map(function (h) { return el('th', { text: h }); }))]),
+        el('tbody', null, rows)
+      ])]);
+
+      out.appendChild(el('article', { class: 'ay' }, [
+        el('div', { class: 'ay-head' }, [
+          el('h2', { text: 'Academic year ' + ay.index }),
+          el('span', { class: 'range', text: C.formatDate(ay.start) + ' – ' + C.formatDate(ay.end) })
+        ]),
+        bar,
+        el('div', { class: 'driver', text: driver }),
+        tbl
+      ]));
+    });
+
+    out.appendChild(el('div', { class: 'panel' }, [el('h3', { text: 'Rule checks' }), checkList(r.checks)]));
+    if (r.notes.length) {
+      out.appendChild(el('div', { class: 'panel' }, [el('h3', { text: 'How dates were counted' }),
+        checkList(r.notes.map(function (n) { return { level: 'info', text: n }; }))]));
+    }
+  }
+
+  function update() {
+    syncForm();
+    render(C.calculate(readInputs()));
+  }
+
+  form.addEventListener('input', update);
+  form.addEventListener('change', update);
+  form.addEventListener('submit', function (e) { e.preventDefault(); });
+  document.getElementById('add-break').addEventListener('click', function () { addBreak(); });
+
+  // Example: a fall start with Thanksgiving week off.
+  addBreak('2026-11-23', '2026-11-29');
+  update();
+})();
+</script>
+</body>
+</html>
