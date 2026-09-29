@@ -14,8 +14,11 @@
  *  - An AY needs at least 24 semester/trimester hours, 36 quarter hours, or
  *    900 clock hours for an undergraduate program.
  *  - A week of instructional time is 7 consecutive days containing at least one
- *    day of regularly scheduled instruction or exams. Scheduled breaks are not
- *    instructional time, so they push end dates out.
+ *    day of regularly scheduled instruction or exams. All counting here is done
+ *    in whole Monday-Sunday instructional weeks. A mid-week start (such as the
+ *    Tuesday after Labor Day) makes that first week count as week 1. A period
+ *    always closes out its last week, and the next period starts on a Monday. A week that is entirely
+ *    a scheduled break has no instruction, so it is skipped and the end moves out.
  *  - Standard terms: semesters (2 per AY), quarters (3 per AY), and trimesters
  *    (3 per AY here: the summer trimester is mandatory and counts toward the AY).
  *  - A quarter program may add an optional summer quarter as a header (first
@@ -111,7 +114,7 @@
     return out.sort(function (a, b) { return a.start - b.start; });
   }
 
-  // Builds a predicate telling whether a day counts toward completion.
+  // Builds a predicate telling whether a day is an instructional day.
   function makeCounter(weekendsCount, breaks) {
     return function (n) {
       if (!weekendsCount && isWeekend(n)) return false;
@@ -126,24 +129,37 @@
     for (var d = from, i = 0; i < MAX_SCAN_DAYS; d++, i++) {
       if (counts(d)) return d;
     }
-    throw new Error('No countable day found within 20 years. Check your breaks.');
+    throw new Error('No instructional day found within 20 years. Check your breaks.');
   }
 
-  // Counts `needed` countable days starting at `from`.
-  // Returns the first and last countable day plus how many calendar days were skipped.
-  function countForward(from, needed, counts) {
-    var first = nextCounted(from, counts);
-    var got = 0, skipped = 0;
-    for (var d = first, i = 0; i < MAX_SCAN_DAYS; d++, i++) {
-      if (counts(d)) {
-        got++;
-        if (got >= needed) return { first: first, last: d, skipped: skipped };
-      } else {
-        skipped++;
-      }
+  // Instructional weeks run Monday through Sunday.
+  function Weeks(counts) {
+    this.counts = counts;
+  }
+  // The Monday on or before day d.
+  Weeks.prototype.weekOf = function (d) {
+    return d - ((dayOfWeek(d) + 6) % 7);
+  };
+  // Instructional days in the week beginning ws, ignoring days before `from`.
+  Weeks.prototype.days = function (ws, from) {
+    var out = [];
+    for (var d = Math.max(ws, from || ws); d < ws + 7; d++) if (this.counts(d)) out.push(d);
+    return out;
+  };
+  // Starting on day `from`, returns the `n`th week that has instruction. The week
+  // containing `from` is week 1 even if `from` is mid-week. Weeks that are entirely
+  // breaks (or only weekends, when weekends don't count) are skipped.
+  Weeks.prototype.count = function (from, n) {
+    var got = 0, first = null, skipped = 0;
+    for (var i = 0, ws = this.weekOf(from); i < MAX_SCAN_DAYS / 7; i++, ws += 7) {
+      var days = this.days(ws, from);
+      if (!days.length) { if (first !== null) skipped++; continue; }
+      if (first === null) first = days[0];
+      got++;
+      if (got >= n) return { first: first, last: days[days.length - 1], lastWeek: ws, skippedWeeks: skipped };
     }
     throw new Error('Period runs longer than 20 years. Check your inputs.');
-  }
+  };
 
   function toNumber(v) {
     if (v === '' || v === null || v === undefined) return NaN;
@@ -195,7 +211,7 @@
     var weekendsCount = raw.weekends !== 'exclude';
     var daysPerWeek = weekendsCount ? 7 : 5;
     var years = Math.max(1, Math.min(6, Math.floor(toNumber(raw.years)) || 2));
-    var gapDays = Math.max(0, Math.floor(toNumber(raw.gapDays)) || 0);
+    var gapWeeks = Math.max(0, Math.floor(toNumber(raw.gapWeeks)) || 0);
     var reduced = !!raw.reducedWeeks && measure === 'credit';
 
     var start = parseISO(raw.start);
@@ -227,9 +243,9 @@
     var classification = '';
     var classDetail = '';
     if (calendar === 'semester' || calendar === 'trimester' || calendar === 'quarter') {
-      var tw = toNumber(raw.termWeeks);
+      var tw = Math.ceil(toNumber(raw.termWeeks));
       if (!(tw > 0)) tw = cal.defaultWeeks;
-      var sw = toNumber(raw.summerWeeks);
+      var sw = Math.ceil(toNumber(raw.summerWeeks));
       if (!(sw > 0)) sw = tw;
       var lower = cal.label.toLowerCase();
       terms = [];
@@ -263,7 +279,7 @@
           ' weeks. It may not qualify as a standard term.' });
       }
     } else if (calendar === 'nonstandard') {
-      termWeeks = parseWeekList(raw.nsTermWeeks);
+      termWeeks = parseWeekList(raw.nsTermWeeks).map(Math.ceil);
       if (!termWeeks.length || termWeeks.some(function (w) { return !(w > 0); })) {
         errors.push('List the length of each nonstandard term in weeks, for example 8, 8, 8, 8.');
         termWeeks = null;
@@ -294,7 +310,7 @@
     if (terms) {
       ayWeeks = terms.reduce(function (a, t) { return a + (t.countsTowardAY ? t.weeks : 0); }, 0);
     } else {
-      ayWeeks = toNumber(raw.ayWeeks);
+      ayWeeks = Math.ceil(toNumber(raw.ayWeeks));
       if (!(ayWeeks > 0)) ayWeeks = minWeeks;
     }
 
@@ -321,11 +337,14 @@
     }
 
     var ays = [];
+    var first;
     try {
+      first = nextCounted(start, counts);
+      var weeks = new Weeks(counts);
       if (terms) {
-        ays = buildTermYears(start, terms, years, gapDays, raw.nextYear === 'anniversary', daysPerWeek, counts, errors);
+        ays = buildTermYears(first, terms, years, gapWeeks, raw.nextYear === 'anniversary', weeks, errors);
       } else {
-        ays = buildNonTermYears(start, ayWeeks, ayHours, hoursPerWeek, years, daysPerWeek, counts, hourUnit);
+        ays = buildNonTermYears(first, ayWeeks, ayHours, hoursPerWeek, years, daysPerWeek, weeks, hourUnit);
       }
     } catch (e) {
       errors.push(e.message);
@@ -345,16 +364,19 @@
     }
     checks.push({ level: 'ok', text: 'No academic years overlap. Each one starts after the previous one ends.' });
 
-    if (ays[0].start !== start) {
-      notes.push('The start date ' + formatDate(start) + ' is not a counted day, so counting begins ' + formatDate(ays[0].start) + '.');
+    if (first !== start) {
+      notes.push('The start date ' + formatDate(start) + ' is not an instructional day, so the first week begins ' + formatDate(first) + '.');
     }
+    notes.push('Instructional weeks run Monday through Sunday. Each term closes out its last week and the next term starts on a Monday.' +
+      (dayOfWeek(first) !== 1 ? ' The ' + formatDate(first) + ' start is mid-week, so that partial week counts as week 1.' : ''));
     if (!weekendsCount) {
-      notes.push('Weekends are not counted: one week of instructional time = 5 weekdays, and weekends push end dates out.');
+      notes.push('Weekends are not instructional days. A week counts when it has at least one weekday of instruction, and terms end on the last weekday of the week.');
     } else {
-      notes.push('Weekends are counted: one week of instructional time = 7 consecutive calendar days.');
+      notes.push('Weekends are instructional days, so each week runs 7 calendar days and a term ends on the last day of its final week.');
     }
     if (breaks.length) {
-      notes.push('Scheduled breaks are not counted as instructional time and extend any period they fall inside.');
+      notes.push('A week that falls entirely inside a break has no instruction and is not counted, so the term runs one week longer. ' +
+        'A break that covers only part of a week (for example Wednesday through Friday) does not remove the week, because the week still has instruction.');
     }
     if (repeating) {
       notes.push('Breaks repeat each year on the same weekdays in the week nearest the original dates, so each year has a similar break.');
@@ -380,42 +402,46 @@
     };
   }
 
-  function buildTermYears(start, terms, years, gapDays, anniversary, daysPerWeek, counts, errors) {
+  function buildTermYears(first, terms, years, gapWeeks, anniversary, weeks, errors) {
     var ays = [];
-    var cursor = start;
+    var cursor = first; // always a week start
     for (var y = 0; y < years; y++) {
       if (y > 0) {
+        var prev = ays[y - 1];
         if (anniversary) {
-          var target = sameWeekdayAnniversary(start, y);
-          if (target <= ays[y - 1].end) {
+          var target = sameWeekdayAnniversary(first, y);
+          if (target <= prev.end) {
             errors.push('Academic year ' + (y + 1) + ' would start ' + formatDate(target) + ', before academic year ' + y +
-              ' ends. Choose "Right after the last term" or shorten the terms.');
+              ' ends on ' + formatDate(prev.end) + '. Choose "Right after the last term", use fewer weeks off, or shorten the terms.');
             return ays;
           }
           cursor = target;
         } else {
-          cursor = ays[y - 1].end + 1 + gapDays;
+          cursor = prev.lastWeek + 7 * (1 + gapWeeks);
         }
       }
       var periods = [];
       for (var i = 0; i < terms.length; i++) {
-        var r = countForward(cursor, Math.round(terms[i].weeks * daysPerWeek), counts);
+        var r = weeks.count(cursor, terms[i].weeks);
         periods.push({
           label: terms[i].label,
           start: r.first,
           end: r.last,
           weeks: terms[i].weeks,
+          breakWeeks: r.skippedWeeks,
           countsTowardAY: terms[i].countsTowardAY,
           summer: !!terms[i].summer,
           calendarDays: r.last - r.first + 1,
-          skipped: r.skipped
+          lastWeek: r.lastWeek
         });
-        cursor = r.last + 1 + gapDays;
+        cursor = r.lastWeek + 7 * (1 + gapWeeks);
       }
+      var last = periods[periods.length - 1];
       ays.push({
         index: y + 1,
         start: periods[0].start,
-        end: periods[periods.length - 1].end,
+        end: last.end,
+        lastWeek: last.lastWeek,
         periods: periods,
         drivenBy: 'terms'
       });
@@ -423,39 +449,52 @@
     return ays;
   }
 
-  function buildNonTermYears(start, ayWeeks, ayHours, hoursPerWeek, years, daysPerWeek, counts, hourUnit) {
+  // Non-term: walk week by week, tracking weeks of instruction and hours. Hours
+  // accrue per instructional day, so a week shortened by a break earns fewer.
+  // Each milestone closes out the week in which it is reached.
+  function buildNonTermYears(first, ayWeeks, ayHours, hoursPerWeek, years, daysPerWeek, weeks, hourUnit) {
     var ays = [];
-    var weekDays = Math.round(ayWeeks * daysPerWeek);
     var hoursPerDay = hoursPerWeek / daysPerWeek;
-    var hourDays = Math.ceil(ayHours / hoursPerDay - 1e-9);
-    var halfWeekDays = Math.ceil(weekDays / 2);
-    var halfHourDays = Math.ceil(ayHours / 2 / hoursPerDay - 1e-9);
-    var cursor = start;
+    var halfWeeks = Math.ceil(ayWeeks / 2);
+    var EPS = 1e-9;
+    var ws = weeks.weekOf(first);
     for (var y = 0; y < years; y++) {
-      var first = nextCounted(cursor, counts);
-      var wEnd = countForward(first, weekDays, counts).last;
-      var hEnd = countForward(first, hourDays, counts).last;
-      var end = Math.max(wEnd, hEnd);
-      var pp1WeeksEnd = countForward(first, halfWeekDays, counts).last;
-      var pp1HoursEnd = countForward(first, halfHourDays, counts).last;
-      var pp1End = Math.max(pp1WeeksEnd, pp1HoursEnd);
-      var pp2Start = nextCounted(pp1End + 1, counts);
+      var wCount = 0, hours = 0, start = null;
+      var m = {}; // milestone -> { week start, last day, weeks so far }
+      for (var i = 0; i < MAX_SCAN_DAYS / 7; i++, ws += 7) {
+        var days = weeks.days(ws, y === 0 ? first : ws);
+        if (!days.length) continue;
+        if (start === null) start = days[0];
+        wCount++;
+        hours += days.length * hoursPerDay;
+        var hit = { week: ws, last: days[days.length - 1], n: wCount };
+        if (!m.halfW && wCount >= halfWeeks) m.halfW = hit;
+        if (!m.halfH && hours >= ayHours / 2 - EPS) m.halfH = hit;
+        if (!m.w && wCount >= ayWeeks) m.w = hit;
+        if (!m.h && hours >= ayHours - EPS) m.h = hit;
+        if (m.w && m.h) break;
+      }
+      if (!(m.w && m.h)) throw new Error('Academic year runs longer than 20 years. Check hours per week.');
+      var pp1 = m.halfH.week > m.halfW.week ? m.halfH : m.halfW;
+      var endHit = m.h.week > m.w.week ? m.h : m.w;
+      var pp2 = weeks.count(pp1.week + 7, 1);
       ays.push({
         index: y + 1,
-        start: first,
-        end: end,
-        weeksEnd: wEnd,
-        hoursEnd: hEnd,
-        drivenBy: hEnd > wEnd ? 'hours' : (wEnd > hEnd ? 'weeks' : 'both'),
+        start: start,
+        end: endHit.last,
+        lastWeek: endHit.week,
+        weeksEnd: m.w.last,
+        hoursEnd: m.h.last,
+        drivenBy: m.h.week > m.w.week ? 'hours' : (m.w.week > m.h.week ? 'weeks' : 'both'),
         periods: [
-          { label: 'Payment period 1', start: first, end: pp1End, weeks: ayWeeks / 2, hours: ayHours / 2,
-            drivenBy: pp1HoursEnd > pp1WeeksEnd ? 'hours' : 'weeks', calendarDays: pp1End - first + 1 },
-          { label: 'Payment period 2', start: pp2Start, end: end, weeks: ayWeeks / 2, hours: ayHours / 2,
-            drivenBy: hEnd > wEnd ? 'hours' : 'weeks', calendarDays: end - pp2Start + 1 }
+          { label: 'Payment period 1', start: start, end: pp1.last, weeks: pp1.n, hours: ayHours / 2,
+            drivenBy: m.halfH.week > m.halfW.week ? 'hours' : 'weeks', calendarDays: pp1.last - start + 1 },
+          { label: 'Payment period 2', start: pp2.first, end: endHit.last, weeks: endHit.n - pp1.n, hours: ayHours / 2,
+            drivenBy: m.h.week > m.w.week ? 'hours' : 'weeks', calendarDays: endHit.last - pp2.first + 1 }
         ],
         hourUnit: hourUnit
       });
-      cursor = end + 1;
+      ws = endHit.week + 7;
     }
     return ays;
   }

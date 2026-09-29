@@ -4,6 +4,6 @@
   "private": true,
   "description": "Title IV academic year and payment period calculator for standard, nonstandard, and non-term programs.",
   "scripts": {
-    "test": "node --test tests/calc.test.js"
+    "test": "node --test tests/calc.test.js && node tests/scenarios.js"
   }
 }

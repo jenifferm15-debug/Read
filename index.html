@@ -256,8 +256,9 @@ footer { color: var(--muted); font-size: 0.8rem; max-width: 80ch; }
 
         <div class="row2" data-show="terms">
           <div class="field">
-            <label for="gapDays">Days off between terms</label>
-            <input type="number" id="gapDays" name="gapDays" min="0" max="180" step="1" value="28">
+            <label for="gapWeeks">Weeks off between terms</label>
+            <input type="number" id="gapWeeks" name="gapWeeks" min="0" max="26" step="1" value="4">
+            <span class="hint">0 = the next term starts the week right after the last one ends.</span>
           </div>
           <div class="field">
             <label for="nextYear">Next academic year starts</label>
@@ -287,7 +288,7 @@ footer { color: var(--muted); font-size: 0.8rem; max-width: 80ch; }
 
         <div class="field">
           <span class="label">Scheduled breaks inside a term</span>
-          <span class="hint">List breaks of 5 or more days, such as Thanksgiving week or winter break. Break days do not count and push end dates out. Single-day holidays usually don't reduce weeks of instruction.</span>
+          <span class="hint">List breaks such as Thanksgiving week or winter break. A week that is entirely a break doesn't count, so the term ends a week later. A break that covers only part of a week doesn't change the end date.</span>
           <div class="breaks" id="breaks"></div>
           <button type="button" class="add-btn" id="add-break">Add break</button>
           <label class="check">
@@ -317,7 +318,7 @@ footer { color: var(--muted); font-size: 0.8rem; max-width: 80ch; }
         <dt>Academic year minimums (34 CFR 668.3)</dt>
         <dd>At least 30 weeks of instructional time for credit-hour programs (26 with an ED-approved reduction) and 26 weeks for clock-hour programs. Undergraduate programs also need at least 24 semester or trimester hours, 36 quarter hours, or 900 clock hours.</dd>
         <dt>Week of instructional time</dt>
-        <dd>Seven consecutive days with at least one scheduled day of instruction or exams. When weekends count, a week is 7 calendar days. When they don't, a week is 5 weekdays and weekends extend the end date. Break days are never counted.</dd>
+        <dd>Seven consecutive days with at least one scheduled day of instruction or exams. Weeks run Monday through Sunday. A mid-week start, such as the Tuesday after Labor Day, counts as week 1. Every term closes out its last week, and the next term starts at the beginning of a later week, never mid-week. When weekends count, a term ends on Sunday. When they don't, it ends on Friday. A week that is entirely a break has no instruction, so it isn't counted and the term runs a week longer. A partial-week break doesn't remove the week.</dd>
         <dt>Standard terms</dt>
         <dd>Semesters are typically 14–17 weeks, and two make an academic year. Trimesters are typically 14–17 weeks, and three make an academic year: the summer trimester is required and its weeks count toward the year. Quarters are typically 10–12 weeks, and three make an academic year. Each term is a payment period.</dd>
         <dt>Summer quarter header or trailer</dt>
@@ -329,7 +330,7 @@ footer { color: var(--muted); font-size: 0.8rem; max-width: 80ch; }
         <dt>Repeating breaks</dt>
         <dd>Breaks you enter are copied into each later year on the same weekdays in the week nearest the original dates, so Thanksgiving week stays Monday through Sunday. Terms that contain a break are extended so each still has its full weeks of instruction. If you enter a break's real date for a later year, that entry replaces the copy.</dd>
         <dt>Non-term and clock-hour programs (34 CFR 668.4)</dt>
-        <dd>The academic year ends on the later of the date the student completes the weeks and the date they complete the hours. Payment period 1 ends at the later of half the weeks and half the hours. The next academic year starts on the next counted day, so years never overlap.</dd>
+        <dd>The academic year ends at the close of the later of two weeks: the week the student completes the weeks of instruction, and the week they complete the hours at the scheduled pace. Hours accrue per instructional day, so a week shortened by a break earns fewer. Payment period 1 ends with the later of half the weeks and half the hours. Payment period 2 and the next academic year start the following Monday, so years never overlap.</dd>
       </dl>
     </div>
   </details>
@@ -392,7 +393,7 @@ footer { color: var(--muted); font-size: 0.8rem; max-width: 80ch; }
       ayHours: fd.get('ayHours'),
       creditUnit: fd.get('creditUnit'),
       hoursPerWeek: fd.get('hoursPerWeek'),
-      gapDays: fd.get('gapDays'),
+      gapWeeks: fd.get('gapWeeks'),
       nextYear: fd.get('nextYear'),
       reducedWeeks: fd.get('reducedWeeks') === 'on',
       repeatBreaks: fd.get('repeatBreaks') === 'on',
@@ -435,7 +436,7 @@ footer { color: var(--muted); font-size: 0.8rem; max-width: 80ch; }
         form.termWeeks.value = C.CALENDARS[cal].defaultWeeks;
         form.summerWeeks.value = C.CALENDARS[cal].defaultWeeks;
       }
-      form.gapDays.value = cal === 'semester' ? 28 : (cal === 'nonstandard' ? 0 : 7);
+      form.gapWeeks.value = cal === 'semester' ? 4 : (cal === 'nonstandard' ? 0 : 1);
       // Three full-time trimesters of 12 credits; the regulatory minimum is still 24.
       form.ayHours.value = cal === 'trimester' ? 36 : C.MIN_HOURS[unit];
       if (cal === 'nonterm') {
