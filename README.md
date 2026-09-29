@@ -10,8 +10,9 @@ Open `index.html` in a browser. No build step or server is needed.
 
 | Calendar | Academic year | Payment periods |
 | --- | --- | --- |
-| Semesters / trimesters | 2 terms (typically 14–17 weeks each) | Each term |
-| Quarters | 3 terms (typically 10–12 weeks each) | Each term |
+| Semesters | 2 terms (typically 14–17 weeks each) | Each term |
+| Trimesters | 3 terms, including a **required** summer trimester that counts toward the year | Each term |
+| Quarters | 3 terms (typically 10–12 weeks each), plus an **optional** summer quarter as a header or trailer | Each term; the summer header/trailer is an extra payment period whose weeks don't count toward the minimum |
 | Nonstandard terms | The terms you list; classified as SE9W, substantially equal under 9 weeks, or not substantially equal | Each term |
 | Non-term / clock-hour | Ends at the **later** of completing the weeks and the hours | Two; PP1 ends at the later of half the weeks and half the hours |
 

@@ -97,3 +97,47 @@ test('bad inputs return errors', () => {
   const r = C.calculate({ calendar: 'semester', start: '2026-08-24', breaks: [{ start: '2026-10-10', end: '2026-10-01' }] });
   assert.equal(r.ok, false);
 });
+
+test('trimester: summer trimester is required and counts toward the AY', () => {
+  const r = C.calculate({ measure: 'credit', calendar: 'trimester', start: '2026-08-24', termWeeks: 15, summerWeeks: 14,
+    weekends: 'count', gapDays: 7, years: 2, nextYear: 'anniversary' });
+  assert.ok(r.ok, r.errors.join());
+  const a = r.years[0];
+  assert.equal(a.periods.length, 3);
+  assert.match(a.periods[2].label, /summer, required/);
+  assert.equal(r.ayWeeks, 44);
+  assert.equal(iso(a.periods[2].end), '2027-07-11');
+  assert.equal(iso(r.years[1].start), '2027-08-24');
+});
+
+test('trimester summer cannot be turned off', () => {
+  const r = C.calculate({ measure: 'credit', calendar: 'trimester', start: '2026-08-24', summer: 'none', weekends: 'count', years: 1 });
+  assert.equal(r.years[0].periods.length, 3);
+});
+
+test('quarter: summer trailer is the last payment period and adds no AY weeks', () => {
+  const r = C.calculate({ measure: 'credit', calendar: 'quarter', start: '2026-09-21', termWeeks: 10, summer: 'trailer', summerWeeks: 8,
+    weekends: 'count', gapDays: 7, years: 2, nextYear: 'anniversary' });
+  assert.ok(r.ok, r.errors.join());
+  const p = r.years[0].periods;
+  assert.equal(p.length, 4);
+  assert.match(p[3].label, /trailer/);
+  assert.equal(p[3].countsTowardAY, false);
+  assert.equal(r.ayWeeks, 30);
+  assert.equal(r.years[0].end, p[3].end);
+  assert.ok(r.years[1].start > r.years[0].end);
+});
+
+test('quarter: summer header is the first payment period', () => {
+  const r = C.calculate({ measure: 'credit', calendar: 'quarter', start: '2026-06-22', termWeeks: 10, summer: 'header', summerWeeks: 10,
+    weekends: 'count', gapDays: 7, years: 1 });
+  const p = r.years[0].periods;
+  assert.match(p[0].label, /header/);
+  assert.equal(iso(p[0].start), '2026-06-22');
+  assert.equal(p.length, 4);
+});
+
+test('quarter with no summer stays at 3 terms', () => {
+  const r = C.calculate({ measure: 'credit', calendar: 'quarter', start: '2026-09-21', summer: 'none', weekends: 'count', years: 1 });
+  assert.equal(r.years[0].periods.length, 3);
+});

@@ -16,7 +16,11 @@
  *  - A week of instructional time is 7 consecutive days containing at least one
  *    day of regularly scheduled instruction or exams. Scheduled breaks are not
  *    instructional time, so they push end dates out.
- *  - Standard terms: semesters and trimesters (2 per AY), quarters (3 per AY).
+ *  - Standard terms: semesters (2 per AY), quarters (3 per AY), and trimesters
+ *    (3 per AY here: the summer trimester is mandatory and counts toward the AY).
+ *  - A quarter program may add an optional summer quarter as a header (first
+ *    payment period of the AY) or trailer (last payment period of the AY). It is
+ *    an extra payment period and does not count toward the AY's weeks.
  *  - Nonstandard terms are "substantially equal" when no term differs from any
  *    other by more than 2 weeks; SE9W also requires every term to be 9+ weeks.
  *  - Term-based programs: each term is a payment period.
@@ -32,7 +36,7 @@
 
   var CALENDARS = {
     semester: { label: 'Semester', termsPerAY: 2, defaultWeeks: 15, typical: [14, 17], creditUnit: 'semester' },
-    trimester: { label: 'Trimester', termsPerAY: 2, defaultWeeks: 15, typical: [14, 17], creditUnit: 'semester' },
+    trimester: { label: 'Trimester', termsPerAY: 3, mandatorySummer: true, defaultWeeks: 15, typical: [14, 17], creditUnit: 'semester' },
     quarter: { label: 'Quarter', termsPerAY: 3, defaultWeeks: 10, typical: [10, 12], creditUnit: 'quarter' },
     nonstandard: { label: 'Nonstandard term' },
     nonterm: { label: 'Non-term' }
@@ -189,21 +193,47 @@
     if (!(ayHours > 0)) ayHours = minHours;
 
     // Term structure (weeks of instructional time per term) for one AY.
+    // Each term: { weeks, label, countsTowardAY }. Optional summer terms are
+    // payment periods but add no weeks of instructional time to the AY.
+    var terms = null;
     var termWeeks = null;
     var classification = '';
     var classDetail = '';
     if (calendar === 'semester' || calendar === 'trimester' || calendar === 'quarter') {
       var tw = toNumber(raw.termWeeks);
       if (!(tw > 0)) tw = cal.defaultWeeks;
-      termWeeks = [];
-      for (var t = 0; t < cal.termsPerAY; t++) termWeeks.push(tw);
-      classification = 'Standard term: ' + cal.label.toLowerCase() + 's';
-      classDetail = cal.termsPerAY + ' ' + cal.label.toLowerCase() + 's of ' + weeksLabel(tw) + ' make one academic year.';
+      var sw = toNumber(raw.summerWeeks);
+      if (!(sw > 0)) sw = tw;
+      var lower = cal.label.toLowerCase();
+      terms = [];
+      if (cal.mandatorySummer) {
+        terms.push({ weeks: tw, label: cal.label + ' 1', countsTowardAY: true });
+        terms.push({ weeks: tw, label: cal.label + ' 2', countsTowardAY: true });
+        terms.push({ weeks: sw, label: cal.label + ' 3 (summer, required)', countsTowardAY: true, summer: true });
+        classDetail = 'Three trimesters make one academic year, including a required summer trimester of ' + weeksLabel(sw) + '.';
+      } else {
+        for (var t = 0; t < cal.termsPerAY; t++) terms.push({ weeks: tw, label: cal.label + ' ' + (t + 1), countsTowardAY: true });
+        classDetail = cal.termsPerAY + ' ' + lower + 's of ' + weeksLabel(tw) + ' make one academic year.';
+        var summerMode = calendar === 'quarter' ? raw.summer : 'none';
+        if (summerMode === 'header' || summerMode === 'trailer') {
+          var st = { weeks: sw, label: 'Summer quarter (' + summerMode + ')', countsTowardAY: false, summer: true };
+          if (summerMode === 'header') terms.unshift(st); else terms.push(st);
+          classDetail += ' An optional summer quarter of ' + weeksLabel(sw) + ' is added as a ' + summerMode +
+            (summerMode === 'header' ? ', the first payment period of the year.' : ', the last payment period of the year.');
+          checks.push({ level: 'ok', text: 'The summer ' + summerMode + ' is an extra payment period. Its weeks are not counted toward the ' +
+            'academic year minimum, and it cannot also be used as a header or trailer for another year.' });
+        }
+      }
+      classification = 'Standard term: ' + lower + 's';
       if (tw < cal.typical[0] || tw > cal.typical[1]) {
         checks.push({ level: 'warn', text: cal.label + 's are typically ' + cal.typical[0] + '–' + cal.typical[1] +
           ' weeks. A ' + weeksLabel(tw) + ' term may not qualify as a standard term. Confirm with the FSA Handbook or calculate it as a nonstandard term.' });
       } else {
-        checks.push({ level: 'ok', text: weeksLabel(tw) + ' is within the typical ' + cal.typical[0] + '–' + cal.typical[1] + ' week range for a standard ' + cal.label.toLowerCase() + '.' });
+        checks.push({ level: 'ok', text: weeksLabel(tw) + ' is within the typical ' + cal.typical[0] + '–' + cal.typical[1] + ' week range for a standard ' + lower + '.' });
+      }
+      if (cal.mandatorySummer && (sw < cal.typical[0] || sw > cal.typical[1])) {
+        checks.push({ level: 'warn', text: 'The required summer trimester is ' + weeksLabel(sw) + ', outside the typical ' + cal.typical[0] + '–' + cal.typical[1] +
+          ' weeks. It may not qualify as a standard term.' });
       }
     } else if (calendar === 'nonstandard') {
       termWeeks = parseWeekList(raw.nsTermWeeks);
@@ -211,6 +241,7 @@
         errors.push('List the length of each nonstandard term in weeks, for example 8, 8, 8, 8.');
         termWeeks = null;
       } else {
+        terms = termWeeks.map(function (w, i) { return { weeks: w, label: 'Term ' + (i + 1), countsTowardAY: true }; });
         var minT = Math.min.apply(null, termWeeks), maxT = Math.max.apply(null, termWeeks);
         var equal = maxT - minT <= 2;
         var se9w = equal && minT >= 9;
@@ -233,8 +264,8 @@
     }
 
     var ayWeeks;
-    if (termWeeks) {
-      ayWeeks = termWeeks.reduce(function (a, b) { return a + b; }, 0);
+    if (terms) {
+      ayWeeks = terms.reduce(function (a, t) { return a + (t.countsTowardAY ? t.weeks : 0); }, 0);
     } else {
       ayWeeks = toNumber(raw.ayWeeks);
       if (!(ayWeeks > 0)) ayWeeks = minWeeks;
@@ -264,8 +295,8 @@
 
     var ays = [];
     try {
-      if (termWeeks) {
-        ays = buildTermYears(start, termWeeks, years, gapDays, raw.nextYear === 'anniversary', daysPerWeek, counts, calendar, errors);
+      if (terms) {
+        ays = buildTermYears(start, terms, years, gapDays, raw.nextYear === 'anniversary', daysPerWeek, counts, errors);
       } else {
         ays = buildNonTermYears(start, ayWeeks, ayHours, hoursPerWeek, years, daysPerWeek, counts, hourUnit);
       }
@@ -316,10 +347,9 @@
     };
   }
 
-  function buildTermYears(start, termWeeks, years, gapDays, anniversary, daysPerWeek, counts, calendar, errors) {
+  function buildTermYears(start, terms, years, gapDays, anniversary, daysPerWeek, counts, errors) {
     var ays = [];
     var cursor = start;
-    var termLabel = calendar === 'nonstandard' ? 'Term' : CALENDARS[calendar].label;
     for (var y = 0; y < years; y++) {
       if (y > 0) {
         if (anniversary) {
@@ -335,13 +365,15 @@
         }
       }
       var periods = [];
-      for (var i = 0; i < termWeeks.length; i++) {
-        var r = countForward(cursor, Math.round(termWeeks[i] * daysPerWeek), counts);
+      for (var i = 0; i < terms.length; i++) {
+        var r = countForward(cursor, Math.round(terms[i].weeks * daysPerWeek), counts);
         periods.push({
-          label: termLabel + ' ' + (i + 1),
+          label: terms[i].label,
           start: r.first,
           end: r.last,
-          weeks: termWeeks[i],
+          weeks: terms[i].weeks,
+          countsTowardAY: terms[i].countsTowardAY,
+          summer: !!terms[i].summer,
           calendarDays: r.last - r.first + 1,
           skipped: r.skipped
         });

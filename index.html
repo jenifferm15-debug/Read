@@ -185,7 +185,7 @@ footer { color: var(--muted); font-size: 0.8rem; max-width: 80ch; }
           <select id="calendar" name="calendar">
             <optgroup label="Standard terms">
               <option value="semester">Semesters (2 per year)</option>
-              <option value="trimester">Trimesters (2 per year)</option>
+              <option value="trimester">Trimesters (3 per year, summer required)</option>
               <option value="quarter">Quarters (3 per year)</option>
             </optgroup>
             <optgroup label="Other">
@@ -208,6 +208,21 @@ footer { color: var(--muted); font-size: 0.8rem; max-width: 80ch; }
           <label for="termWeeks">Weeks of instruction per term</label>
           <input type="number" id="termWeeks" name="termWeeks" min="1" max="30" step="1" value="15">
           <span class="hint" id="termWeeks-hint"></span>
+        </div>
+
+        <div class="field" data-show="quarter">
+          <label for="summer">Summer quarter</label>
+          <select id="summer" name="summer">
+            <option value="none">No summer quarter</option>
+            <option value="trailer">Trailer: add summer to the end of the year</option>
+            <option value="header">Header: start the year with summer</option>
+          </select>
+          <span class="hint" id="summer-hint"></span>
+        </div>
+
+        <div class="field" data-show="summer-weeks">
+          <label for="summerWeeks" id="summerWeeks-label">Weeks of instruction in the summer term</label>
+          <input type="number" id="summerWeeks" name="summerWeeks" min="1" max="30" step="1" value="15">
         </div>
 
         <div class="field" data-show="nonstandard">
@@ -300,7 +315,9 @@ footer { color: var(--muted); font-size: 0.8rem; max-width: 80ch; }
         <dt>Week of instructional time</dt>
         <dd>Seven consecutive days with at least one scheduled day of instruction or exams. When weekends count, a week is 7 calendar days. When they don't, a week is 5 weekdays and weekends extend the end date. Break days are never counted.</dd>
         <dt>Standard terms</dt>
-        <dd>Semesters and trimesters are typically 14–17 weeks, and two make an academic year. Quarters are typically 10–12 weeks, and three make an academic year. Each term is a payment period.</dd>
+        <dd>Semesters are typically 14–17 weeks, and two make an academic year. Trimesters are typically 14–17 weeks, and three make an academic year: the summer trimester is required and its weeks count toward the year. Quarters are typically 10–12 weeks, and three make an academic year. Each term is a payment period.</dd>
+        <dt>Summer quarter header or trailer</dt>
+        <dd>A quarter program can add an optional summer quarter. As a trailer it is the last payment period of the academic year it follows. As a header it is the first payment period of the academic year it starts. Either way it is an extra payment period: its weeks don't count toward the 30-week minimum, and the same summer can't serve as both a trailer and a header.</dd>
         <dt>Nonstandard terms</dt>
         <dd>Any term that isn't a semester, trimester, or quarter. Terms are substantially equal when no term differs from another by more than 2 weeks. SE9W terms are substantially equal and at least 9 weeks each. Each term is a payment period, and a student must finish both the weeks and the credits of the academic year before starting the next one.</dd>
         <dt>Non-term and clock-hour programs (34 CFR 668.4)</dt>
@@ -360,6 +377,8 @@ footer { color: var(--muted); font-size: 0.8rem; max-width: 80ch; }
       calendar: fd.get('calendar'),
       start: fd.get('start'),
       termWeeks: fd.get('termWeeks'),
+      summer: fd.get('summer'),
+      summerWeeks: fd.get('summerWeeks'),
       nsTermWeeks: fd.get('nsTermWeeks'),
       ayWeeks: fd.get('ayWeeks'),
       ayHours: fd.get('ayHours'),
@@ -390,7 +409,9 @@ footer { color: var(--muted); font-size: 0.8rem; max-width: 80ch; }
       nonterm: cal === 'nonterm',
       terms: cal !== 'nonterm',
       credit: measure === 'credit',
-      'credit-unit': measure === 'credit' && !standard
+      'credit-unit': measure === 'credit' && !standard,
+      quarter: cal === 'quarter',
+      'summer-weeks': cal === 'trimester' || (cal === 'quarter' && form.summer.value !== 'none')
     };
     form.querySelectorAll('[data-show]').forEach(function (n) {
       n.hidden = !show[n.getAttribute('data-show')];
@@ -401,9 +422,13 @@ footer { color: var(--muted); font-size: 0.8rem; max-width: 80ch; }
       (measure === 'clock' ? 'Clock' : (unit === 'quarter' ? 'Quarter' : 'Semester') + ' credit') + ' hours in the academic year';
 
     if (cal !== prevCalendar) {
-      if (standard) form.termWeeks.value = C.CALENDARS[cal].defaultWeeks;
-      form.gapDays.value = cal === 'quarter' ? 7 : (cal === 'nonstandard' ? 0 : 28);
-      form.ayHours.value = C.MIN_HOURS[unit];
+      if (standard) {
+        form.termWeeks.value = C.CALENDARS[cal].defaultWeeks;
+        form.summerWeeks.value = C.CALENDARS[cal].defaultWeeks;
+      }
+      form.gapDays.value = cal === 'semester' ? 28 : (cal === 'nonstandard' ? 0 : 7);
+      // Three full-time trimesters of 12 credits; the regulatory minimum is still 24.
+      form.ayHours.value = cal === 'trimester' ? 36 : C.MIN_HOURS[unit];
       if (cal === 'nonterm') {
         form.ayWeeks.value = measure === 'clock' ? 26 : 30;
         form.hoursPerWeek.value = measure === 'clock' ? 30 : 1;
@@ -411,9 +436,18 @@ footer { color: var(--muted); font-size: 0.8rem; max-width: 80ch; }
       prevCalendar = cal;
     }
 
+    document.getElementById('summerWeeks-label').textContent = cal === 'trimester'
+      ? 'Weeks of instruction in the summer trimester (required)'
+      : 'Weeks of instruction in the summer quarter';
+    document.getElementById('summer-hint').textContent = {
+      none: 'The academic year is fall, winter, and spring quarters only.',
+      trailer: 'Summer is the last payment period of the year. It is optional and its weeks are not counted toward the 30-week minimum.',
+      header: 'Summer is the first payment period of the year. Enter the summer start as the start date. Its weeks are not counted toward the 30-week minimum.'
+    }[form.summer.value];
+
     var hints = {
       semester: 'Two semesters of instruction make one academic year.',
-      trimester: 'Two trimesters of instruction make one academic year.',
+      trimester: 'Three trimesters make one academic year. The summer trimester is required and counts toward the year.',
       quarter: 'Three quarters of instruction make one academic year.',
       nonstandard: 'Terms that are not semesters, trimesters, or quarters, such as 8-week modules.',
       nonterm: measure === 'clock'
@@ -482,12 +516,17 @@ footer { color: var(--muted); font-size: 0.8rem; max-width: 80ch; }
       if (ay.drivenBy === 'hours') driver = 'Ends when the hours are completed (' + C.formatDate(ay.hoursEnd) + '). Weeks alone finish ' + C.formatDate(ay.weeksEnd) + '.';
       else if (ay.drivenBy === 'weeks') driver = 'Ends when the weeks are completed (' + C.formatDate(ay.weeksEnd) + '). Hours at the scheduled pace finish ' + C.formatDate(ay.hoursEnd) + '.';
       else if (ay.drivenBy === 'both') driver = 'Weeks and hours finish on the same day.';
-      else driver = num(r.ayWeeks) + ' weeks of instruction across ' + ay.periods.length + ' terms, ' + span + ' calendar days.';
+      else {
+        var counted = ay.periods.filter(function (p) { return p.countsTowardAY !== false; }).length;
+        var extra = ay.periods.length - counted;
+        driver = num(r.ayWeeks) + ' weeks of instruction across ' + counted + ' terms' +
+          (extra ? ', plus an optional summer quarter' : '') + '. ' + span + ' calendar days.';
+      }
 
       var rows = ay.periods.map(function (p, i) {
         var len = r.calendar === 'nonterm'
           ? num(p.weeks) + ' wks · ' + num(p.hours) + ' ' + (r.hourUnit === 'clock' ? 'clock' : 'cr') + ' hrs'
-          : num(p.weeks) + ' wks';
+          : num(p.weeks) + ' wks' + (p.countsTowardAY === false ? ' (optional, not counted)' : '');
         return el('tr', null, [
           el('td', null, [el('span', { class: 'sw', style: 'background:' + SWATCH[i % SWATCH.length] }), document.createTextNode(p.label)]),
           el('td', { class: 'date', text: C.formatDate(p.start) }),
